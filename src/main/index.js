@@ -1,5 +1,5 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, safeStorage } from 'electron'
-import { join } from 'path'
+import { join, dirname } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import Store from 'electron-store'
@@ -41,14 +41,9 @@ function createWindow() {
   }
 }
 
-// --- CONTRÔLES DE LA FENÊTRE ---
-ipcMain.on('minimize-app', () => {
-  BrowserWindow.getFocusedWindow()?.minimize()
-})
-
-ipcMain.on('close-app', () => {
-  BrowserWindow.getFocusedWindow()?.close()
-})
+// --- CONTRÔLES ---
+ipcMain.on('minimize-app', () => { BrowserWindow.getFocusedWindow()?.minimize() })
+ipcMain.on('close-app', () => { BrowserWindow.getFocusedWindow()?.close() })
 
 // --- CONFIG ---
 ipcMain.handle('select-riot-path', async () => {
@@ -64,26 +59,17 @@ ipcMain.handle('select-riot-path', async () => {
 })
 ipcMain.handle('get-riot-path', () => store.get('riotPath', null))
 
-// --- GESTION COMPTES (SÉCURISÉE) ---
-ipcMain.handle('get-accounts', () => {
-  log('Demande de la liste des comptes.')
-  return store.get('accounts', [])
-})
+// --- GESTION COMPTES ---
+ipcMain.handle('get-accounts', () => store.get('accounts', []))
 
 ipcMain.handle('add-account', (event, accountData) => {
-  log(`Tentative d'ajout du compte: ${accountData.username}`)
-  // Validation backend
-  if (!accountData || !accountData.username || !accountData.password) {
-    log("Erreur: Données invalides pour l'ajout de compte.")
-    return null // On ne fait rien et on renvoie null
-  }
+  if (!accountData || !accountData.username || !accountData.password) return null
 
   const list = store.get('accounts', [])
   let encryptedPass = ''
   if (accountData.password && safeStorage.isEncryptionAvailable()) {
     encryptedPass = safeStorage.encryptString(accountData.password).toString('hex')
-  } else if (accountData.password) {
-    log('ATTENTION: Cryptage indisponible.')
+  } else {
     encryptedPass = accountData.password
   }
 
@@ -97,65 +83,22 @@ ipcMain.handle('add-account', (event, accountData) => {
   }
   list.push(newAccount)
   store.set('accounts', list)
-  log(`Compte ${newAccount.displayName} ajouté. Nouvelle liste envoyée.`)
-  return [...list]
-})
-
-ipcMain.handle('edit-account', (event, accountData) => {
-  log(`Tentative de modification du compte ID: ${accountData.id}`)
-  // Validation backend
-  if (!accountData || !accountData.id || !accountData.username) {
-    log("Erreur: Données invalides pour la modification de compte.")
-    return null
-  }
-
-  const list = store.get('accounts', [])
-  const accountIndex = list.findIndex((acc) => acc.id === accountData.id)
-
-  if (accountIndex === -1) {
-    log(`Erreur: Compte ID ${accountData.id} non trouvé.`)
-    return store.get('accounts', []) // Renvoie la liste actuelle sans changement
-  }
-
-  const accountToEdit = list[accountIndex]
-  accountToEdit.displayName = accountData.displayName || accountData.username
-  accountToEdit.username = accountData.username
-  accountToEdit.rank = accountData.rank || ''
-
-  if (accountData.password) {
-    log(`Mise à jour du mot de passe pour ${accountData.username}.`)
-    if (safeStorage.isEncryptionAvailable()) {
-      accountToEdit.password = safeStorage.encryptString(accountData.password).toString('hex')
-      accountToEdit.encrypted = true
-    } else {
-      log('ATTENTION: Cryptage indisponible pour la mise à jour du mot de passe.')
-      accountToEdit.password = accountData.password
-      accountToEdit.encrypted = false
-    }
-  }
-
-  list[accountIndex] = accountToEdit
-  store.set('accounts', list)
-  log(`Compte ${accountToEdit.displayName} modifié. Nouvelle liste envoyée.`)
   return [...list]
 })
 
 ipcMain.handle('delete-account', (event, id) => {
-  log(`Tentative de suppression du compte ID: ${id}`)
   let list = store.get('accounts', [])
   const newList = list.filter((acc) => acc.id !== id)
   store.set('accounts', newList)
-  log(`Compte ID ${id} supprimé. Nouvelle liste envoyée.`)
   return newList
 })
 
 ipcMain.handle('reorder-accounts', (event, newAccountList) => {
-  log('Réorganisation des comptes.')
   store.set('accounts', newAccountList)
   return newAccountList
 })
 
-// --- LANCEMENT (inchangé) ---
+// --- LANCEMENT JEU (AVEC DOUBLE INJECTION POUR VALORANT) ---
 ipcMain.handle('launch-game', async (event, { id, game }) => {
   const riotPath = store.get('riotPath')
   if (!riotPath || !fs.existsSync(riotPath)) return 'Erreur : Chemin invalide'
@@ -164,63 +107,77 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
   const account = accounts.find((acc) => acc.id === id)
   if (!account) return 'Erreur : Compte introuvable'
 
+  // Décryptage
   let finalPassword = account.password
   if (account.encrypted && safeStorage.isEncryptionAvailable()) {
     try {
       const buffer = Buffer.from(account.password, 'hex')
       finalPassword = safeStorage.decryptString(buffer)
     } catch (e) {
-      log('Erreur décryptage : ' + e.message)
-      return 'Erreur : Impossible de décrypter le mot de passe (fichier corrompu ou changé de PC ?)'
+      return 'Erreur : Impossible de décrypter (Changement de PC ?)'
     }
   }
 
   const cleanUser = account.username.trim()
   const cleanPass = finalPassword.trim()
-  log(`Lancement pour ${account.displayName}...`)
+  const gameId = game.toLowerCase()
 
-  const privateSettingsPath = join(
-    process.env.LOCALAPPDATA,
-    'Riot Games',
-    'Riot Client',
-    'Data',
-    'RiotGamesPrivateSettings.yaml'
-  )
-  if (fs.existsSync(privateSettingsPath)) {
-    try {
-      fs.unlinkSync(privateSettingsPath)
-    } catch (e) {}
-  }
+  log(`Lancement de ${gameId} pour ${account.displayName}...`)
 
+  // 1. Suppression Cache
+  const privateSettingsPath = join(process.env.LOCALAPPDATA, 'Riot Games', 'Riot Client', 'Data', 'RiotGamesPrivateSettings.yaml')
+  if (fs.existsSync(privateSettingsPath)) { try { fs.unlinkSync(privateSettingsPath) } catch (e) {} }
+
+  // 2. Kill Processus
   try {
-    exec('taskkill /F /IM RiotClientServices.exe /IM RiotClientUx.exe /IM LeagueClient.exe /IM VALORANT.exe')
+    exec('taskkill /F /IM RiotClientServices.exe /IM RiotClientUx.exe /IM LeagueClient.exe /IM VALORANT.exe /IM VALORANT-Win64-Shipping.exe')
   } catch (e) {}
+
   await new Promise((r) => setTimeout(r, 2000))
 
-  const command = `start "" "${riotPath}" --launch-product=${game} --launch-patchline=live`
-  exec(command)
+  // 3. PREMIER LANCEMENT (Pour ouvrir le client et se connecter)
+  const workingDir = dirname(riotPath)
+  const command = `start "" "${riotPath}" --launch-product=${gameId} --launch-patchline=live`
 
+  exec(command, { cwd: workingDir })
+
+  // 4. Macro Clavier (Connexion)
   try {
     await typeLoginVBS(cleanUser, cleanPass)
-    return `Connexion de ${account.displayName}...`
   } catch (err) {
     return 'Erreur macro clavier.'
   }
+
+  // --- LE FIX POUR LE BOUTON "JOUER" ---
+  if (gameId === 'valorant') {
+    log("Attente post-connexion pour Valorant...")
+    // On attend 7 secondes que le login se finisse et que le bouton "JOUER" apparaisse
+    await new Promise((r) => setTimeout(r, 7000))
+
+    log("Relance de la commande pour forcer le démarrage du jeu...")
+    // On renvoie EXACTEMENT la même commande.
+    // Comme le client est déjà ouvert et connecté, cette commande va "cliquer" sur Jouer pour nous.
+    exec(command, { cwd: workingDir })
+  }
+
+  return `Jeu lancé pour ${account.displayName} !`
 })
 
-// --- VBSCRIPT (Inchangé) ---
+// --- VBSCRIPT ---
 function typeLoginVBS(username, password) {
   return new Promise((resolve, reject) => {
+    // J'ai augmenté un peu le délai initial (Wait 2000) pour laisser le temps
+    // à la fenêtre de mise à jour de disparaître
     const vbsContent = `
       Set WshShell = WScript.CreateObject("WScript.Shell")
       Dim i
-      For i = 1 To 30
+      For i = 1 To 40
         WScript.Sleep 1000
         If WshShell.AppActivate("Riot Client") Then
            Exit For
         End If
       Next
-      WScript.Sleep 500
+      WScript.Sleep 2000
       WshShell.SendKeys "${username}"
       WScript.Sleep 100
       WshShell.SendKeys "{TAB}"
@@ -232,9 +189,7 @@ function typeLoginVBS(username, password) {
     const tempVbsPath = join(app.getPath('temp'), 'riot_login_macro.vbs')
     fs.writeFileSync(tempVbsPath, vbsContent)
     exec(`cscript //Nologo "${tempVbsPath}"`, (error) => {
-      try {
-        fs.unlinkSync(tempVbsPath)
-      } catch (e) {}
+      try { fs.unlinkSync(tempVbsPath) } catch (e) {}
       if (error) reject(error)
       else resolve()
     })
