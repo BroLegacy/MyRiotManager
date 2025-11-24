@@ -1,0 +1,664 @@
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap');
+
+/* --- VARIABLES & POLICES --- */
+:root {
+  --bg-main: #0f1923;
+  --bg-card: #1c2b3a;
+  --border-color: #2c3e50;
+  --text-primary: #ece8e1;
+  --text-secondary: #a09b8c;
+  --text-gold: #c8aa6e;
+  --riot-red: #d13639;
+  --valorant-red: #ff4655;
+  --lol-blue: #0ac8b9;
+  --font-primary: 'Montserrat', sans-serif;
+}
+
+/* --- BARRE DE TITRE PERSONNALISÉE --- */
+.title-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 32px;
+  background-color: transparent;
+  display: flex;
+  justify-content: flex-end;
+  z-index: 9999;
+}
+
+.title-bar-drag-region {
+  flex-grow: 1;
+  -webkit-app-region: drag; /* Zone pour faire glisser la fenêtre */
+  user-select: none;
+}
+
+.window-controls {
+  display: flex;
+  -webkit-app-region: no-drag; /* Les boutons ne doivent pas faire glisser la fenêtre */
+}
+
+.win-btn {
+  width: 46px;
+  height: 100%;
+  border: none;
+  background-color: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+
+.win-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.win-btn.close:hover {
+  background-color: var(--riot-red);
+  color: white;
+}
+
+/* --- STYLE GLOBAL --- */
+.app-container {
+  height: 100vh;
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  font-family: var(--font-primary), 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+  padding-top: 32px; /* Espace pour la barre de titre */
+  box-sizing: border-box;
+}
+
+/* --- BOUTONS GENERIQUES --- */
+.btn {
+  padding: 10px 20px;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-family: inherit;
+}
+.btn-primary {
+  background-color: var(--riot-red);
+  color: white;
+  border: 1px solid var(--riot-red);
+}
+.btn-primary:hover {
+  background-color: #e04b4e;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(209, 54, 57, 0.3);
+}
+.btn-secondary {
+  background-color: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+.btn-secondary:hover {
+  background-color: var(--border-color);
+  color: var(--text-primary);
+}
+.btn-icon {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px;
+}
+.btn-icon:hover {
+  color: var(--text-primary);
+}
+.btn-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.8rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.btn-close:hover {
+  color: var(--text-primary);
+}
+
+/* --- HEADER --- */
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 30px;
+  height: 70px;
+  background-color: rgba(10, 20, 30, 0.5);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+.logo-riot {
+  color: var(--riot-red);
+}
+.logo-manager {
+  color: var(--text-primary);
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+/* --- WRAPPER PRINCIPAL --- */
+.main-wrapper {
+  flex-grow: 1;
+  display: flex;
+  position: relative;
+  overflow: hidden;
+}
+
+/* --- CONTENU PRINCIPAL --- */
+.content-area {
+  flex-grow: 1;
+  overflow-y: auto;
+  padding: 40px;
+  position: relative;
+  transition: filter 0.3s ease;
+}
+.content-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 19;
+}
+
+.accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 25px;
+}
+
+/* --- CARTE DE COMPTE --- */
+.account-card {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+.account-card:not(.is-draggable):hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  border-color: var(--text-gold);
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.account-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px; /* Espace entre les textes */
+}
+.account-name {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-gold);
+}
+.account-user {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+.account-rank {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--lol-blue);
+  background-color: rgba(10, 200, 185, 0.1);
+  border: 1px solid rgba(10, 200, 185, 0.2);
+  padding: 2px 8px;
+  border-radius: 12px;
+  align-self: flex-start;
+}
+
+.card-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: auto; /* Pousse les boutons vers le bas */
+}
+
+/* --- NOUVEAU STYLE COMPLET POUR LES BOUTONS JOUER --- */
+.btn-play {
+  padding: 0; /* On retire le padding pour que l'image prenne toute la place */
+  height: 50px; /* Hauteur fixe pour un look de bannière */
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
+  overflow: hidden; /* Crucial pour les animations */
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  background-size: 120%; /* On zoome un peu l'image de base */
+  background-position: center;
+}
+
+.btn-play::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5); /* Overlay sombre pour le contraste */
+  z-index: 1;
+  transition: background-color 0.3s ease;
+}
+
+.btn-play > * {
+  position: relative; /* Pour que le texte et le logo passent au-dessus de l'overlay */
+  z-index: 2;
+  color: white;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.9rem;
+}
+
+/* Conteneur pour le contenu du bouton */
+.btn-play-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+}
+
+.btn-play.valorant {
+  background-image: url('./assets/valorant-bg.jpg'); /* REMPLACEZ PAR VOTRE IMAGE */
+}
+
+.btn-play.league {
+  background-image: url('./assets/lol-bg.jpg'); /* REMPLACEZ PAR VOTRE IMAGE */
+}
+
+/* Effets au survol */
+.btn-play:hover:not(:disabled) {
+  transform: scale(1.05);
+  box-shadow: 0 5px 20px -5px rgba(0, 0, 0, 0.5);
+}
+
+.btn-play:hover:not(:disabled)::before {
+  background-color: rgba(0, 0, 0, 0.3); /* L'overlay s'éclaircit */
+}
+
+/* Animation "Shine" */
+.btn-play::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -60%;
+  width: 20%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.3) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(25deg);
+  transition: left 0.6s ease;
+  z-index: 3;
+}
+
+.btn-play:hover:not(:disabled)::after {
+  left: 140%; /* Fait glisser la lueur à travers le bouton */
+}
+
+.btn-play:disabled {
+  filter: grayscale(1);
+  cursor: not-allowed;
+}
+/* --- FIN DU NOUVEAU STYLE --- */
+
+/* Conteneur pour les boutons d'action de la carte */
+.card-actions {
+  display: flex;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background-color: var(--bg-card);
+  border-radius: 50px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+}
+.account-card:hover .card-actions {
+  opacity: 1;
+}
+.btn-card-action {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.btn-card-action:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.btn-card-action.btn-delete:hover {
+  color: white;
+  background-color: var(--valorant-red);
+}
+
+/* --- ETAT DE CHARGEMENT --- */
+.account-card.is-loading {
+  pointer-events: none;
+}
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(15, 25, 35, 0.8);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 2;
+}
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--border-color);
+  border-top-color: var(--lol-blue);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- ETAT VIDE --- */
+.empty-state {
+  text-align: center;
+  margin-top: 10vh;
+  color: var(--text-secondary);
+}
+.empty-state-img {
+  width: 120px;
+  height: auto;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+.empty-state h2 {
+  color: var(--text-primary);
+  font-size: 1.5rem;
+}
+
+/* --- FOOTER --- */
+.app-footer {
+  padding: 15px 30px;
+  background-color: #111;
+  border-top: 1px solid var(--border-color);
+  text-align: center;
+  color: var(--lol-blue);
+  font-weight: 500;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+.app-footer p {
+  margin: 0;
+}
+
+/* --- PANNEAU LATERAL SETTINGS --- */
+.settings-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 350px;
+  height: 100%;
+  background-color: var(--bg-card);
+  border-left: 1px solid var(--border-color);
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+.settings-panel.is-open {
+  transform: translateX(0);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.3);
+}
+.panel-header {
+  padding: 0 25px;
+  height: 70px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+.panel-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-gold);
+}
+.panel-body {
+  padding: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  overflow-y: auto;
+}
+
+/* --- MODALE AJOUT/MODIFICATION DE COMPTE --- */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.modal {
+  width: 100%;
+  max-width: 450px;
+  background-color: var(--bg-card);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+.modal-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-gold);
+}
+.modal-body {
+  padding: 25px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.modal-footer {
+  padding: 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px; /* Ajoute de l'espace entre les boutons */
+}
+
+/* Style pour le texte de confirmation */
+.delete-confirm-text {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  text-align: center;
+  margin: 0;
+}
+.delete-confirm-text strong {
+  color: var(--text-gold);
+  font-weight: 600;
+}
+
+/* --- FORMULAIRES (dans modale et panneau) --- */
+
+/* Boîte pour les messages d'erreur de formulaire */
+.form-error-box {
+  background-color: rgba(209, 54, 57, 0.2);
+  border: 1px solid var(--riot-red);
+  color: var(--text-primary);
+  padding: 12px;
+  border-radius: 4px;
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.form-group label,
+.setting-item label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.form-group input,
+select {
+  width: 100%;
+  background: var(--bg-main);
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  color: var(--text-primary);
+  border-radius: 4px;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+.form-group input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--text-gold);
+}
+.path-box {
+  background: var(--bg-main);
+  padding: 10px;
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+  word-break: break-all;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  user-select: text;
+  -webkit-user-select: text;
+}
+.setting-item .btn-secondary {
+  width: 100%;
+}
+
+/* --- SETUP OVERLAY --- */
+.setup-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 25, 35, 0.98);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  text-align: center;
+}
+.setup-box {
+  background: var(--bg-card);
+  padding: 40px 50px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  max-width: 500px;
+}
+.setup-box h2 {
+  color: var(--text-gold);
+  margin-top: 0;
+}
+.setup-box p {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 25px;
+}
+
+/* --- LOGOS DE JEU --- */
+.game-logo {
+  height: 20px;
+  width: auto;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); /* Ajoute une ombre au logo */
+}
+
+/* --- STYLES POUR LE GLISSER-DÉPOSER ET LE MODE ÉDITION --- */
+.app-container.reorder-active {
+  cursor: grabbing;
+}
+
+.account-card.is-draggable {
+  cursor: grab;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(200, 170, 110, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(200, 170, 110, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(200, 170, 110, 0);
+  }
+}
+
+.ghost {
+  opacity: 0.5;
+  background: #2c3e50;
+  border: 1px dashed var(--text-gold);
+}
+
+.dragging {
+  cursor: grabbing !important;
+  transform: scale(1.03);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+  z-index: 5;
+  animation: none;
+}
