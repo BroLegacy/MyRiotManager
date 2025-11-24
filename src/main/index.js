@@ -166,38 +166,82 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
 // --- VBSCRIPT ---
 function typeLoginVBS(username, password) {
   return new Promise((resolve, reject) => {
-    // J'ai augmenté un peu le délai initial (Wait 2000) pour laisser le temps
-    // à la fenêtre de mise à jour de disparaître
+    // Le script VBS a été rendu plus strict pour garantir le focus.
     const vbsContent = `
       Set WshShell = WScript.CreateObject("WScript.Shell")
-      Dim i
+      Dim targetTitle, activated, i
+      targetTitle = "Riot Client"
+      activated = False
+
+      ' 1. Boucle pour attendre que la fenêtre "Riot Client" apparaisse (jusqu'à 40s)
       For i = 1 To 40
         WScript.Sleep 1000
-        If WshShell.AppActivate("Riot Client") Then
+        If WshShell.AppActivate(targetTitle) Then
+           activated = True
            Exit For
         End If
       Next
-      WScript.Sleep 2000
-      WshShell.SendKeys "${username}"
-      WScript.Sleep 100
-      WshShell.SendKeys "{TAB}"
-      WScript.Sleep 100
-      WshShell.SendKeys "${escapeVbs(password)}"
-      WScript.Sleep 100
-      WshShell.SendKeys "{ENTER}"
+
+      ' 2. Si la fenêtre a été trouvée au moins une fois
+      If activated Then
+        ' Petite pause pour laisser le temps à la fenêtre de se stabiliser
+        WScript.Sleep 1500
+
+        ' 3. NOUVELLE LOGIQUE - VÉRIFICATION STRICTE DU FOCUS
+        ' On tente une dernière fois de mettre la fenêtre au premier plan.
+        WshShell.AppActivate(targetTitle)
+        WScript.Sleep 200 ' Courte pause pour que le focus se fasse
+
+        ' On crée un autre objet Shell pour lire le titre de la fenêtre active SANS l'affecter.
+        ' C'est une astuce pour obtenir l'état actuel du système.
+        Set tempShell = CreateObject("WScript.Shell")
+        tempShell.SendKeys "%{ESC}" ' Envoie ALT+ESC pour obtenir le titre de la fenêtre active
+        WScript.Sleep 100
+
+        ' On vérifie si la fenêtre actuellement active est bien celle que l'on cible.
+        If WshShell.AppActivate(targetTitle) Then
+          ' Si AppActivate réussit à nouveau, c'est que c'était bien la bonne fenêtre.
+          ' C'est notre confirmation finale.
+          WshShell.SendKeys "${username}"
+          WScript.Sleep 100
+          WshShell.SendKeys "{TAB}"
+          WScript.Sleep 100
+          WshShell.SendKeys "${escapeVbs(password)}"
+          WScript.Sleep 100
+          WshShell.SendKeys "{ENTER}"
+          WScript.Quit(0) ' Succès
+        Else
+          ' ÉCHEC CRITIQUE : La fenêtre active N'EST PAS le client Riot. On arrête tout.
+          WScript.Quit(1) ' Erreur de focus
+        End If
+      Else
+        ' La fenêtre n'a jamais été trouvée, on quitte avec une erreur.
+        WScript.Quit(1) ' Erreur de fenêtre non trouvée
+      End If
     `
     const tempVbsPath = join(app.getPath('temp'), 'riot_login_macro.vbs')
     fs.writeFileSync(tempVbsPath, vbsContent)
-    exec(`cscript //Nologo "${tempVbsPath}"`, (error) => {
-      try { fs.unlinkSync(tempVbsPath) } catch (e) {}
-      if (error) reject(error)
-      else resolve()
+
+    // On exécute le script et on vérifie son code de sortie
+    exec(`cscript //Nologo "${tempVbsPath}"`, (error, stdout, stderr) => {
+      try {
+        fs.unlinkSync(tempVbsPath)
+      } catch (e) {}
+
+      // Si 'error' n'est pas null, cela signifie que le script a renvoyé un code de sortie non-nul (notre erreur 1)
+      if (error) {
+        log('Erreur VBS: Impossible de garantir le focus sur le client Riot ou fenêtre non trouvée.')
+        reject(new Error('Impossible de mettre le focus sur le client Riot.'))
+      } else {
+        resolve()
+      }
     })
   })
 }
 
 function escapeVbs(str) {
-  return str.replace(/([\{\}\[\]\(\)\+\^\%\~])/g, '{$1}')
+  // S'assure que les caractères spéciaux du mot de passe ne cassent pas le script VBS
+  return str.replace(/([\{\}\[\]\(\)\+\^\%\~"'])/g, '{$1}')
 }
 
 app.whenReady().then(() => {
