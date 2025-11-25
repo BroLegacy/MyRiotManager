@@ -8,6 +8,7 @@ const riotPath = ref('')
 const statusMessage = ref('')
 const isLoading = ref(false)
 const launchingAccountId = ref(null)
+const isPro = ref(false)
 
 // --- UI State ---
 const isSettingsOpen = ref(false)
@@ -30,6 +31,11 @@ const formError = ref('')
 const isDeleteModalOpen = ref(false)
 const accountToDelete = ref(null)
 
+// États pour la licence
+const licenseKey = ref('')
+const licenseError = ref('')
+const gumroadUrl = 'https://voidbis.gumroad.com/l/flekds?wanted=true'
+
 // --- Window Controls ---
 const minimizeWindow = () => window.api.minimizeApp()
 const closeWindow = () => window.api.closeApp()
@@ -38,15 +44,17 @@ const closeWindow = () => window.api.closeApp()
 onMounted(async () => {
   console.log('[VUE] App montée, récupération des données initiales.')
   try {
-    // On vérifie si l'API est bien là
     if (!window.api) {
       throw new Error("L'API du preload n'est pas chargée.")
     }
-    ;[accounts.value, riotPath.value] = await Promise.all([
+    // On récupère toutes les données en parallèle, y compris le statut PRO
+    ;[accounts.value, riotPath.value, isPro.value] = await Promise.all([
       window.api.getAccounts(),
-      window.api.getRiotPath()
+      window.api.getRiotPath(),
+      window.api.getProStatus()
     ])
     console.log('[VUE] Données initiales reçues:', accounts.value)
+    console.log('[VUE] Statut PRO:', isPro.value)
   } catch (error) {
     console.error('[VUE] Erreur critique lors du chargement initial:', error)
     statusMessage.value = "Erreur de communication. Veuillez redémarrer l'application."
@@ -63,14 +71,13 @@ const handleSelectPath = async () => {
     const path = await window.api.selectRiotPath()
     if (path) riotPath.value = path
   } catch (error) {
-    console.error("Erreur lors de la sélection du chemin:", error)
-    statusMessage.value = "Une erreur est survenue."
+    console.error('Erreur lors de la sélection du chemin:', error)
+    statusMessage.value = 'Une erreur est survenue.'
   }
 }
 
 const resetForm = () => {
   form.value = { id: null, displayName: '', username: '', password: '', rank: '' }
-  // On efface aussi l'erreur
   formError.value = ''
 }
 
@@ -95,11 +102,9 @@ const openEditModal = (account) => {
 }
 
 const handleSaveAccount = async () => {
-  // On efface les erreurs précédentes
   formError.value = ''
   const plainFormData = toRaw(form.value)
 
-  // Validation améliorée
   if (!plainFormData.username || !plainFormData.username.trim()) {
     formError.value = 'Le pseudo de connexion est requis.'
     return
@@ -110,22 +115,27 @@ const handleSaveAccount = async () => {
   }
 
   try {
-    let updatedAccounts
+    let result
     if (modalMode.value === 'edit') {
-      updatedAccounts = await window.api.editAccount(plainFormData)
+      result = await window.api.editAccount(plainFormData)
     } else {
-      updatedAccounts = await window.api.addAccount(plainFormData)
+      result = await window.api.addAccount(plainFormData)
     }
 
-    if (updatedAccounts) {
-      accounts.value = updatedAccounts
+    if (result && result.error === 'LIMIT_REACHED') {
+      formError.value = 'Limite de 3 comptes atteinte. Passez à la version PRO pour en ajouter plus !'
+      return // On arrête ici
+    }
+
+    if (result) {
+      accounts.value = result
       isAccountModalOpen.value = false
     } else {
       throw new Error("La liste des comptes n'a pas été retournée par l'API.")
     }
   } catch (error) {
     console.error(`[VUE] Erreur lors de la sauvegarde du compte:`, error)
-    formError.value = "Une erreur est survenue lors de la sauvegarde."
+    formError.value = 'Une erreur est survenue lors de la sauvegarde.'
   }
 }
 
@@ -144,7 +154,7 @@ const confirmDelete = async () => {
     accountToDelete.value = null
   } catch (error) {
     console.error(`[VUE] Erreur lors de la suppression:`, error)
-    statusMessage.value = "Erreur lors de la suppression du compte."
+    statusMessage.value = 'Erreur lors de la suppression du compte.'
     isDeleteModalOpen.value = false
   }
 }
@@ -165,8 +175,8 @@ const handlePlay = async (account, game) => {
     const res = await window.api.launchGame({ id: account.id, game })
     statusMessage.value = res
   } catch (error) {
-    console.error("Erreur de lancement:", error)
-    statusMessage.value = "Une erreur est survenue lors du lancement."
+    console.error('Erreur de lancement:', error)
+    statusMessage.value = 'Une erreur est survenue lors du lancement.'
   } finally {
     setTimeout(() => {
       statusMessage.value = ''
@@ -175,11 +185,41 @@ const handlePlay = async (account, game) => {
     }, 5000)
   }
 }
+
+// NOUVEAU: Ouvre le lien d'achat dans le navigateur
+const buyLicense = () => {
+  window.api.openExternalLink(gumroadUrl)
+}
+
+// MODIFIÉ: Fonction pour vérifier la clé de licence
+const handleVerifyLicense = async () => {
+  licenseError.value = ''
+  if (!licenseKey.value.trim()) {
+    licenseError.value = 'Veuillez entrer une clé.'
+    return
+  }
+  try {
+    const result = await window.api.verifyLicense(licenseKey.value)
+    if (result.success) {
+      isPro.value = true
+      statusMessage.value = 'Félicitations, votre licence PRO est activée !'
+      licenseKey.value = '' // On vide le champ
+      setTimeout(() => {
+        statusMessage.value = ''
+      }, 5000)
+    } else {
+      licenseError.value = result.error || 'Clé invalide.'
+    }
+  } catch (error) {
+    console.error("Erreur lors de la vérification de la licence:", error)
+    licenseError.value = 'Une erreur est survenue lors de la vérification.'
+  }
+}
 </script>
 
 <template>
   <div class="app-container" :class="{ 'reorder-active': isReorderMode }">
-    <!-- Barre de titre personnalisée -->
+    <!-- ... (barre de titre) ... -->
     <div class="title-bar">
       <div class="title-bar-drag-region"></div>
       <div class="window-controls">
@@ -192,7 +232,7 @@ const handlePlay = async (account, game) => {
       </div>
     </div>
 
-    <!-- Overlay pour la configuration initiale -->
+    <!-- ... (overlay de configuration) ... -->
     <div v-if="!riotPath" class="setup-overlay">
       <div class="setup-box">
         <h2>Bienvenue, Invocateur</h2>
@@ -206,8 +246,10 @@ const handlePlay = async (account, game) => {
       <div class="logo">
         <span class="logo-riot">RIOT</span>
         <span class="logo-manager">MANAGER</span>
+        <span v-if="isPro" class="pro-badge">PRO</span>
       </div>
       <div class="header-actions">
+        <!-- ... (autres boutons) ... -->
         <button v-if="!isReorderMode" @click="toggleReorderMode" class="btn btn-secondary" title="Modifier l'ordre des comptes">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>
           Modifier l'ordre
@@ -228,6 +270,7 @@ const handlePlay = async (account, game) => {
     </header>
 
     <div class="main-wrapper">
+      <!-- ... (contenu principal, grille de comptes, etc.) ... -->
       <main class="content-area">
         <div v-if="isSettingsOpen" class="content-overlay" @click="isSettingsOpen = false"></div>
 
@@ -258,14 +301,12 @@ const handlePlay = async (account, game) => {
 
               <div class="card-body">
                 <button @click="handlePlay(acc, 'valorant')" :disabled="isLoading" class="btn-play valorant">
-                  <!-- NOUVEAU: Conteneur pour le contenu -->
                   <div class="btn-play-content">
                     <img src="./assets/valo.avif" class="game-logo" alt="Valorant Logo" />
                     <span>JOUER</span>
                   </div>
                 </button>
                 <button @click="handlePlay(acc, 'league_of_legends')" :disabled="isLoading" class="btn-play league">
-                  <!-- NOUVEAU: Conteneur pour le contenu -->
                   <div class="btn-play-content">
                     <img src="./assets/lol.png" class="game-logo" alt="League of Legends Logo" />
                     <span>JOUER</span>
@@ -287,16 +328,45 @@ const handlePlay = async (account, game) => {
           <button @click="isSettingsOpen = false" class="btn-close">×</button>
         </div>
         <div class="panel-body">
+          <!-- MODIFIÉ: Section PRO mise en avant -->
+          <div class="setting-item pro-section">
+            <label>Licence PRO</label>
+            <div v-if="isPro" class="pro-status-box">
+              <span class="pro-badge">PRO</span>
+              <span>Version PRO activée. Merci !</span>
+            </div>
+            <div v-else>
+              <p class="pro-description">Passez PRO pour un nombre de comptes illimité.</p>
+
+              <!-- NOUVEAU: Bouton d'achat -->
+              <button @click="buyLicense" class="btn btn-primary" style="margin-bottom: 20px;">
+                Acheter une licence (0.99€/mois)
+              </button>
+
+              <!-- Formulaire d'activation -->
+              <div class="form-group">
+                <label for="license-key">Ou entrez votre clé de licence</label>
+                <input id="license-key" v-model="licenseKey" @keyup.enter="handleVerifyLicense" placeholder="Ex: 5AE082B4-F630-4B1A-A959-ED46CC4B5C16" />
+              </div>
+              <div v-if="licenseError" class="form-error-box" style="margin-bottom: 10px;">
+                {{ licenseError }}
+              </div>
+              <button @click="handleVerifyLicense" class="btn btn-secondary">
+                Activer
+              </button>
+            </div>
+          </div>
+
           <div class="setting-item">
             <label>Chemin du client Riot</label>
             <div class="path-box">{{ riotPath || 'Non défini' }}</div>
             <button @click="handleSelectPath" class="btn btn-secondary">Modifier le chemin</button>
           </div>
-          <!-- Le sélecteur de région a été retiré d'ici -->
         </div>
       </aside>
     </div>
 
+    <!-- ... (footer, modales, etc.) ... -->
     <footer v-if="statusMessage" class="app-footer">
       <p>{{ statusMessage }}</p>
     </footer>

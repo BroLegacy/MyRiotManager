@@ -662,3 +662,49 @@ select:focus {
   z-index: 5;
   animation: none;
 }
+
+/* Ajoutez ceci à la fin de votre fichier main.css */
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pro-badge {
+  background-color: var(--text-gold);
+  color: var(--bg-main);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 6px;
+  border-radius: 4px;
+  line-height: 1;
+}
+
+.pro-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 25px;
+}
+
+.pro-section .btn-primary {
+  width: 100%;
+}
+
+.pro-description {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.pro-status-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: rgba(200, 170, 110, 0.1);
+  padding: 10px;
+  border-radius: 4px;
+  justify-content: center;
+  color: var(--text-gold);
+  font-weight: 600;
+}

@@ -16,7 +16,14 @@ const api = {
 
   // Fonctions pour contrôler la fenêtre
   minimizeApp: () => ipcRenderer.send('minimize-app'),
-  closeApp: () => ipcRenderer.send('close-app')
+  closeApp: () => ipcRenderer.send('close-app'),
+
+  // NOUVEAU: Fonction pour ouvrir un lien externe
+  openExternalLink: (url) => ipcRenderer.send('open-external-link', url),
+
+  // Fonctions pour le statut PRO
+  getProStatus: () => ipcRenderer.invoke('get-pro-status'),
+  verifyLicense: (key) => ipcRenderer.invoke('verify-license', key)
 }
 
 if (process.contextIsolated) {
