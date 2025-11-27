@@ -730,3 +730,34 @@ select:focus {
   letter-spacing: normal;
   cursor: pointer;
 }
+
+/* NOUVEAU: Style pour la bannière de mise à jour */
+.update-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--text-gold);
+  color: var(--bg-main);
+  padding: 12px 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  font-weight: 600;
+  z-index: 1001;
+  box-shadow: 0 -5px 15px rgba(0,0,0,0.2);
+}
+
+.update-banner .btn-primary {
+  background-color: var(--bg-main);
+  color: var(--text-primary);
+  border-color: var(--bg-main);
+  padding: 5px 15px; /* Plus petit pour s'intégrer dans la bannière */
+  box-shadow: none;
+}
+
+.update-banner .btn-primary:hover {
+  background-color: #333;
+  transform: none;
+}

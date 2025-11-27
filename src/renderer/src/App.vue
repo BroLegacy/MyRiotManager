@@ -9,7 +9,12 @@ const statusMessage = ref('')
 const isLoading = ref(false)
 const launchingAccountId = ref(null)
 const isPro = ref(false)
-const stayLoggedIn = ref(false) // NOUVEAU: État pour la case à cocher
+const stayLoggedIn = ref(false)
+
+// NOUVEAU: États pour la mise à jour
+const updateAvailable = ref(false)
+const newVersion = ref('')
+const updateDownloaded = ref(false)
 
 // --- UI State ---
 const isSettingsOpen = ref(false)
@@ -53,20 +58,31 @@ onMounted(async () => {
       window.api.getAccounts(),
       window.api.getRiotPath(),
       window.api.getProStatus(),
-      window.api.getStayLoggedIn() // NOUVEAU: Récupération de la préférence
+      window.api.getStayLoggedIn()
     ])
     console.log('[VUE] Données initiales reçues:', {
       accounts: accounts.value.length,
       isPro: isPro.value,
       stayLoggedIn: stayLoggedIn.value
     })
+
+    // NOUVEAU: Écoute des événements de mise à jour
+    window.api.onUpdateAvailable((version) => {
+      newVersion.value = version
+      updateAvailable.value = true
+      updateDownloaded.value = false // On s'assure que l'état est propre
+    })
+    window.api.onUpdateDownloaded(() => {
+      updateDownloaded.value = true
+    })
+
   } catch (error) {
     console.error('[VUE] Erreur critique lors du chargement initial:', error)
     statusMessage.value = "Erreur de communication. Veuillez redémarrer l'application."
   }
 })
 
-// NOUVEAU: Watcher pour sauvegarder la préférence quand elle change
+// Watcher pour sauvegarder la préférence quand elle change
 watch(stayLoggedIn, (newValue) => {
   window.api.setStayLoggedIn(newValue)
 })
@@ -75,7 +91,24 @@ watch(stayLoggedIn, (newValue) => {
 const isAccountListEmpty = computed(() => accounts.value.length === 0)
 const modalTitle = computed(() => (modalMode.value === 'add' ? 'Ajouter un nouveau compte' : 'Modifier le compte'))
 
+// NOUVEAU: Message pour la bannière de mise à jour
+const updateMessage = computed(() => {
+  if (updateDownloaded.value) {
+    return 'Mise à jour prête. Redémarrez pour installer.'
+  }
+  if (updateAvailable.value) {
+    return `Téléchargement de la version ${newVersion.value}...`
+  }
+  return ''
+})
+
 // --- Methods ---
+
+// NOUVEAU: Méthode pour redémarrer l'app
+const restartAndUpdate = () => {
+  window.api.restartAppToUpdate()
+}
+
 const handleSelectPath = async () => {
   try {
     const path = await window.api.selectRiotPath()
@@ -499,7 +532,7 @@ const handleVerifyLicense = async () => {
             </div>
           </div>
 
-          <!-- NOUVEAU: Section pour "Rester connecté" -->
+          <!-- Section pour "Rester connecté" -->
           <div class="setting-item">
             <label>Options de connexion</label>
             <div class="checkbox-group">
@@ -518,10 +551,17 @@ const handleVerifyLicense = async () => {
       </aside>
     </div>
 
-    <!-- ... (footer, modales, etc.) ... -->
+    <!-- Footer pour les messages de statut -->
     <footer v-if="statusMessage" class="app-footer">
       <p>{{ statusMessage }}</p>
     </footer>
+
+    <!-- NOUVEAU: Bannière pour la mise à jour -->
+    <div v-if="updateAvailable" class="update-banner">
+      <span>{{ updateMessage }}</span>
+      <button v-if="updateDownloaded" @click="restartAndUpdate" class="btn btn-primary">Redémarrer</button>
+    </div>
+
 
     <!-- Modale unifiée pour Ajout/Modification -->
     <div v-if="isAccountModalOpen" class="modal-backdrop" @click="isAccountModalOpen = false">

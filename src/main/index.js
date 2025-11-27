@@ -7,6 +7,7 @@ import { exec } from 'child_process'
 import fs from 'fs'
 import { randomUUID } from 'crypto'
 import axios from 'axios'
+import { autoUpdater } from 'electron-updater' // NOUVEAU
 
 const store = new Store()
 
@@ -18,23 +19,45 @@ function log(msg) {
   console.log(`[MAIN] ${new Date().toLocaleTimeString()}: ${msg}`)
 }
 
-async function validateLicenseKey(key) {
-  if (!key) return false
+// NOUVEAU: Configuration de l'auto-updater
+autoUpdater.logger = {
+  info: (msg) => log(`[Updater] ${msg}`),
+  warn: (msg) => log(`[Updater] WARN: ${msg}`),
+  error: (msg) => log(`[Updater] ERROR: ${msg}`)
+}
 
-  // On peut garder la clé de dev pour faciliter les tests
+// --- GESTION DES MISES À JOUR ---
+function setupAutoUpdater(mainWindow) {
+  autoUpdater.on('update-available', (info) => {
+    log(`Mise à jour disponible: ${info.version}`)
+    mainWindow.webContents.send('update-available', info.version)
+  })
+
+  autoUpdater.on('update-downloaded', () => {
+    log('Mise à jour téléchargée. Prête à être installée.')
+    mainWindow.webContents.send('update-downloaded')
+  })
+
+  ipcMain.on('restart-app-to-update', () => {
+    log('Redémarrage de l\'application pour installer la mise à jour.')
+    autoUpdater.quitAndInstall()
+  })
+}
+
+
+async function validateLicenseKey(key) {
+  // ... (code inchangé)
+  if (!key) return false
   if (key === 'DEV-PRO-MODE') {
     log('Activation du mode PRO via la clé de développement.')
     return true
   }
-
   log(`Validation de la clé: ${key}`)
   try {
     const params = new URLSearchParams()
     params.append('product_id', 'bg3K5UjSI2S-QrZHlX0QwQ==')
     params.append('license_key', key)
-
     const response = await axios.post('https://api.gumroad.com/v2/licenses/verify', params)
-
     if (response.data.success && !response.data.purchase.refunded) {
       log('Clé de licence confirmée comme valide.')
       return true
@@ -68,6 +91,9 @@ function createWindow() {
     }
   })
 
+  // NOUVEAU: On passe la mainWindow à la fonction de setup de l'updater
+  setupAutoUpdater(mainWindow)
+
   mainWindow.on('ready-to-show', () => {
     mainWindow.show()
   })
@@ -84,6 +110,7 @@ function createWindow() {
   }
 }
 
+// ... (tous les autres handlers IPC restent inchangés)
 // --- CONTRÔLES ---
 ipcMain.on('minimize-app', () => {
   BrowserWindow.getFocusedWindow()?.minimize()
@@ -396,6 +423,16 @@ app.whenReady().then(async () => {
   }
 
   createWindow()
+
+  // NOUVEAU: On lance la vérification des mises à jour après la création de la fenêtre
+  // On le fait ici pour s'assurer que la fenêtre existe pour recevoir les messages.
+  // On attend un peu pour ne pas ralentir le démarrage visible.
+  setTimeout(() => {
+    if (!is.dev) { // On ne vérifie les MAJ qu'en production
+      autoUpdater.checkForUpdates()
+    }
+  }, 3000)
+
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

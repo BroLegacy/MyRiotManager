@@ -13,8 +13,6 @@ const api = {
   launchGame: (data) => ipcRenderer.invoke('launch-game', data),
   selectRiotPath: () => ipcRenderer.invoke('select-riot-path'),
   getRiotPath: () => ipcRenderer.invoke('get-riot-path'),
-
-  // NOUVEAU: Fonctions pour l'option "Rester connecté"
   getStayLoggedIn: () => ipcRenderer.invoke('get-stay-logged-in'),
   setStayLoggedIn: (value) => ipcRenderer.invoke('set-stay-logged-in', value),
 
@@ -27,7 +25,12 @@ const api = {
 
   // Fonctions pour le statut PRO
   getProStatus: () => ipcRenderer.invoke('get-pro-status'),
-  verifyLicense: (key) => ipcRenderer.invoke('verify-license', key)
+  verifyLicense: (key) => ipcRenderer.invoke('verify-license', key),
+
+  // NOUVEAU: Fonctions pour les mises à jour
+  onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_event, ...args) => callback(...args)),
+  onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, ...args) => callback(...args)),
+  restartAppToUpdate: () => ipcRenderer.send('restart-app-to-update')
 }
 
 if (process.contextIsolated) {

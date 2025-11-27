@@ -1,9 +1,9 @@
 {
   "name": "my-riot-manager",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "My Riot Manager",
   "main": "./out/main/index.js",
-  "author": "example.com",
+  "author": "Void-Bis",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
@@ -22,6 +22,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "axios": "^1.13.2",
     "electron-store": "^8.1.0",
+    "electron-updater": "^6.6.2",
     "fs-extra": "^11.3.2",
     "vuedraggable": "^4.1.0"
   },
@@ -38,5 +39,26 @@
     "vite": "^7.1.6",
     "vue": "^3.5.21",
     "vue-eslint-parser": "^10.2.0"
+  },
+  "build": {
+    "appId": "com.voidbis.riotmanager",
+    "productName": "Riot Manager",
+    "files": [
+      "out/",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "resources/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "ton-nom-github",
+      "repo": "nom-du-repo-github"
+    }
   }
 }
