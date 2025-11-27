@@ -10,7 +10,7 @@ import axios from 'axios'
 
 const store = new Store()
 
-// NOUVEAU: Variable d'état en mémoire. C'est notre source de vérité pour le statut PRO.
+// Variable d'état en mémoire. C'est notre source de vérité pour le statut PRO.
 let isProValidated = false
 
 // --- LOGGING ---
@@ -18,7 +18,6 @@ function log(msg) {
   console.log(`[MAIN] ${new Date().toLocaleTimeString()}: ${msg}`)
 }
 
-// MODIFIÉ: Utilisation de product_id au lieu de product_permalink
 async function validateLicenseKey(key) {
   if (!key) return false
 
@@ -31,7 +30,6 @@ async function validateLicenseKey(key) {
   log(`Validation de la clé: ${key}`)
   try {
     const params = new URLSearchParams()
-    // LA CORRECTION EST ICI :
     params.append('product_id', 'bg3K5UjSI2S-QrZHlX0QwQ==')
     params.append('license_key', key)
 
@@ -50,8 +48,6 @@ async function validateLicenseKey(key) {
     } else {
       log(`Erreur de communication avec l'API de licence: ${error.message}`)
     }
-    // En cas d'erreur réseau, on ne valide pas, mais on ne supprime pas la clé.
-    // L'utilisateur pourra réessayer plus tard.
     return false
   }
 }
@@ -120,14 +116,20 @@ ipcMain.handle('select-riot-path', async () => {
 })
 ipcMain.handle('get-riot-path', () => store.get('riotPath', null))
 
-// --- GESTION PRO ---
+// NOUVEAU: Handlers pour l'option "Rester connecté"
+ipcMain.handle('get-stay-logged-in', () => store.get('stayLoggedIn', false))
+ipcMain.handle('set-stay-logged-in', (event, value) => {
+  const boolValue = !!value
+  store.set('stayLoggedIn', boolValue)
+  log(`Option "Rester connecté" mise à jour : ${boolValue}`)
+  return boolValue
+})
 
-// MODIFIÉ: Renvoie l'état de la variable en mémoire, pas le store.
+// --- GESTION PRO ---
 ipcMain.handle('get-pro-status', () => {
   return isProValidated
 })
 
-// MODIFIÉ: Le handler sauvegarde la clé, pas un simple booléen.
 ipcMain.handle('verify-license', async (event, key) => {
   const trimmedKey = typeof key === 'string' ? key.trim() : ''
   if (!trimmedKey) {
@@ -137,16 +139,10 @@ ipcMain.handle('verify-license', async (event, key) => {
   const isValid = await validateLicenseKey(trimmedKey)
 
   if (isValid) {
-    // La clé est bonne, on la sauvegarde pour les prochains démarrages.
     store.set('licenseKey', trimmedKey)
-    // On met à jour l'état en mémoire pour la session actuelle.
     isProValidated = true
     return { success: true }
   } else {
-    // Si la clé est invalide, on s'assure qu'aucune clé n'est stockée.
-    // On ne supprime la clé que si l'erreur n'est pas une erreur réseau
-    // Pour l'instant, on la supprime si la validation échoue pour une raison quelconque
-    // (sauf erreur réseau gérée dans validateLicenseKey)
     isProValidated = false
     return { success: false, error: 'Clé de licence invalide ou introuvable.' }
   }
@@ -159,7 +155,6 @@ ipcMain.handle('add-account', (event, accountData) => {
   if (!accountData || !accountData.username || !accountData.password) return null
 
   const list = store.get('accounts', [])
-  // On utilise la variable en mémoire pour vérifier le statut PRO
   if (!isProValidated && list.length >= 3) {
     log('Limite de comptes atteinte pour la version gratuite.')
     return { error: 'LIMIT_REACHED' }
@@ -185,7 +180,6 @@ ipcMain.handle('add-account', (event, accountData) => {
   return [...list]
 })
 
-// ... (le reste des handlers 'edit-account', 'delete-account', etc. n'a pas besoin de changer)
 ipcMain.handle('edit-account', (event, accountData) => {
   if (!accountData || !accountData.id) return null
 
@@ -194,12 +188,10 @@ ipcMain.handle('edit-account', (event, accountData) => {
 
   if (accountIndex === -1) return null
 
-  // Mise à jour des champs
   list[accountIndex].displayName = accountData.displayName || list[accountIndex].displayName
   list[accountIndex].username = accountData.username || list[accountIndex].username
   list[accountIndex].rank = accountData.rank
 
-  // Mise à jour du mot de passe uniquement s'il est fourni
   if (accountData.password) {
     if (safeStorage.isEncryptionAvailable()) {
       list[accountIndex].password = safeStorage.encryptString(accountData.password).toString('hex')
@@ -226,7 +218,7 @@ ipcMain.handle('reorder-accounts', (event, newAccountList) => {
   return newAccountList
 })
 
-// --- LANCEMENT JEU (AVEC DOUBLE INJECTION POUR VALORANT) ---
+// --- LANCEMENT JEU ---
 ipcMain.handle('launch-game', async (event, { id, game }) => {
   const riotPath = store.get('riotPath')
   if (!riotPath || !fs.existsSync(riotPath)) return 'Erreur : Chemin invalide'
@@ -235,7 +227,6 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
   const account = accounts.find((acc) => acc.id === id)
   if (!account) return 'Erreur : Compte introuvable'
 
-  // Décryptage
   let finalPassword = account.password
   if (account.encrypted && safeStorage.isEncryptionAvailable()) {
     try {
@@ -252,7 +243,6 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
 
   log(`Lancement de ${gameId} pour ${account.displayName}...`)
 
-  // 1. Suppression Cache
   const privateSettingsPath = join(
     process.env.LOCALAPPDATA,
     'Riot Games',
@@ -266,7 +256,6 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
     } catch (e) {}
   }
 
-  // 2. Kill Processus
   try {
     exec(
       'taskkill /F /IM RiotClientServices.exe /IM RiotClientUx.exe /IM LeagueClient.exe /IM VALORANT.exe /IM VALORANT-Win64-Shipping.exe'
@@ -275,28 +264,23 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
 
   await new Promise((r) => setTimeout(r, 2000))
 
-  // 3. PREMIER LANCEMENT (Pour ouvrir le client et se connecter)
   const workingDir = dirname(riotPath)
   const command = `start "" "${riotPath}" --launch-product=${gameId} --launch-patchline=live`
 
   exec(command, { cwd: workingDir })
 
-  // 4. Macro Clavier (Connexion)
   try {
-    await typeLoginVBS(cleanUser, cleanPass)
+    // MODIFIÉ: On récupère la préférence et on la passe à la macro
+    const stayLoggedIn = store.get('stayLoggedIn', false)
+    await typeLoginVBS(cleanUser, cleanPass, stayLoggedIn)
   } catch (err) {
     return 'Erreur macro clavier.'
   }
 
-  // --- LE FIX POUR LE BOUTON "JOUER" ---
   if (gameId === 'valorant') {
     log('Attente post-connexion pour Valorant...')
-    // On attend 7 secondes que le login se finisse et que le bouton "JOUER" apparaisse
     await new Promise((r) => setTimeout(r, 7000))
-
     log('Relance de la commande pour forcer le démarrage du jeu...')
-    // On renvoie EXACTEMENT la même commande.
-    // Comme le client est déjà ouvert et connecté, cette commande va "cliquer" sur Jouer pour nous.
     exec(command, { cwd: workingDir })
   }
 
@@ -304,7 +288,8 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
 })
 
 // --- VBSCRIPT ---
-function typeLoginVBS(username, password) {
+// MODIFIÉ: La fonction accepte un paramètre "stayLoggedIn"
+function typeLoginVBS(username, password, stayLoggedIn) {
   return new Promise((resolve, reject) => {
     // Le script VBS a été rendu plus strict pour garantir le focus.
     const vbsContent = `
@@ -325,28 +310,45 @@ function typeLoginVBS(username, password) {
       ' 2. Si la fenêtre a été trouvée au moins une fois
       If activated Then
         ' Petite pause pour laisser le temps à la fenêtre de se stabiliser
-        WScript.Sleep 1500
+        WScript.Sleep 500
 
         ' 3. NOUVELLE LOGIQUE - VÉRIFICATION STRICTE DU FOCUS
-        ' On tente une dernière fois de mettre la fenêtre au premier plan.
         WshShell.AppActivate(targetTitle)
         WScript.Sleep 200 ' Courte pause pour que le focus se fasse
 
-        ' On crée un autre objet Shell pour lire le titre de la fenêtre active SANS l'affecter.
-        ' C'est une astuce pour obtenir l'état actuel du système.
         Set tempShell = CreateObject("WScript.Shell")
-        tempShell.SendKeys "%{ESC}" ' Envoie ALT+ESC pour obtenir le titre de la fenêtre active
+        tempShell.SendKeys "%{ESC}"
         WScript.Sleep 100
 
         ' On vérifie si la fenêtre actuellement active est bien celle que l'on cible.
         If WshShell.AppActivate(targetTitle) Then
-          ' Si AppActivate réussit à nouveau, c'est que c'était bien la bonne fenêtre.
           ' C'est notre confirmation finale.
           WshShell.SendKeys "${username}"
           WScript.Sleep 100
           WshShell.SendKeys "{TAB}"
           WScript.Sleep 100
           WshShell.SendKeys "${escapeVbs(password)}"
+          WScript.Sleep 100
+
+          ' NOUVEAU: Logique pour cocher "Rester connecté"
+          If ${stayLoggedIn ? 'True' : 'False'} Then
+            WshShell.SendKeys "{TAB}"
+            WScript.Sleep 50
+            WshShell.SendKeys "{TAB}"
+            WScript.Sleep 50
+            WshShell.SendKeys "{TAB}"
+            WScript.Sleep 50
+            WshShell.SendKeys "{TAB}"
+            WScript.Sleep 50
+            WshShell.SendKeys "{TAB}"
+            WScript.Sleep 50
+            WshShell.SendKeys "{TAB}"
+            WScript.Sleep 100
+            WshShell.SendKeys " " ' Appuie sur Espace pour cocher la case
+            WScript.Sleep 50
+            WshShell.SendKeys "{TAB}"
+          End If
+
           WScript.Sleep 100
           WshShell.SendKeys "{ENTER}"
           WScript.Quit(0) ' Succès
@@ -362,17 +364,13 @@ function typeLoginVBS(username, password) {
     const tempVbsPath = join(app.getPath('temp'), 'riot_login_macro.vbs')
     fs.writeFileSync(tempVbsPath, vbsContent)
 
-    // On exécute le script et on vérifie son code de sortie
-    exec(`cscript //Nologo "${tempVbsPath}"`, (error, stdout, stderr) => {
+    exec(`cscript //Nologo "${tempVbsPath}"`, (error) => {
       try {
         fs.unlinkSync(tempVbsPath)
       } catch (e) {}
 
-      // Si 'error' n'est pas null, cela signifie que le script a renvoyé un code de sortie non-nul (notre erreur 1)
       if (error) {
-        log(
-          'Erreur VBS: Impossible de garantir le focus sur le client Riot ou fenêtre non trouvée.'
-        )
+        log('Erreur VBS: Impossible de garantir le focus sur le client Riot ou fenêtre non trouvée.')
         reject(new Error('Impossible de mettre le focus sur le client Riot.'))
       } else {
         resolve()
@@ -382,20 +380,17 @@ function typeLoginVBS(username, password) {
 }
 
 function escapeVbs(str) {
-  // S'assure que les caractères spéciaux du mot de passe ne cassent pas le script VBS
   return str.replace(/([\{\}\[\]\(\)\+\^\%\~"'])/g, '{$1}')
 }
 
-// MODIFIÉ: Logique de démarrage de l'application
+// Logique de démarrage de l'application
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.electron')
 
-  // NOUVEAU: On vérifie la licence au démarrage, AVANT de créer la fenêtre.
   const storedKey = store.get('licenseKey', null)
   if (storedKey) {
     isProValidated = await validateLicenseKey(storedKey)
     if (!isProValidated) {
-      // Si la clé stockée n'est plus valide (remboursée, etc.), on la supprime.
       store.delete('licenseKey')
     }
   }

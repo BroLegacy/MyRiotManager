@@ -681,11 +681,6 @@ select:focus {
   line-height: 1;
 }
 
-.pro-section {
-  border-top: 1px solid var(--border-color);
-  padding-top: 25px;
-}
-
 .pro-section .btn-primary {
   width: 100%;
 }
@@ -707,4 +702,31 @@ select:focus {
   justify-content: center;
   color: var(--text-gold);
   font-weight: 600;
+}
+
+/* NOUVEAU: Style pour la case à cocher */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--bg-main);
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.checkbox-group input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--riot-red); /* Colore la case quand elle est cochée */
+  cursor: pointer;
+}
+
+.checkbox-group label {
+  margin-bottom: 0; /* Annule la marge par défaut */
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  text-transform: none; /* Annule la majuscule */
+  letter-spacing: normal;
+  cursor: pointer;
 }

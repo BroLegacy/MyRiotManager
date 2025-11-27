@@ -14,11 +14,15 @@ const api = {
   selectRiotPath: () => ipcRenderer.invoke('select-riot-path'),
   getRiotPath: () => ipcRenderer.invoke('get-riot-path'),
 
+  // NOUVEAU: Fonctions pour l'option "Rester connecté"
+  getStayLoggedIn: () => ipcRenderer.invoke('get-stay-logged-in'),
+  setStayLoggedIn: (value) => ipcRenderer.invoke('set-stay-logged-in', value),
+
   // Fonctions pour contrôler la fenêtre
   minimizeApp: () => ipcRenderer.send('minimize-app'),
   closeApp: () => ipcRenderer.send('close-app'),
 
-  // NOUVEAU: Fonction pour ouvrir un lien externe
+  // Fonction pour ouvrir un lien externe
   openExternalLink: (url) => ipcRenderer.send('open-external-link', url),
 
   // Fonctions pour le statut PRO
