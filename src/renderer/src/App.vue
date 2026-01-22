@@ -10,8 +10,10 @@ const isLoading = ref(false)
 const launchingAccountId = ref(null)
 const isPro = ref(false)
 const stayLoggedIn = ref(false)
+// NOUVEAU: État pour le délai de connexion
+const loginDelay = ref(1500)
 
-// NOUVEAU: États pour la mise à jour
+// États pour la mise à jour
 const updateAvailable = ref(false)
 const newVersion = ref('')
 const updateDownloaded = ref(false)
@@ -53,24 +55,26 @@ onMounted(async () => {
     if (!window.api) {
       throw new Error("L'API du preload n'est pas chargée.")
     }
-    // On récupère toutes les données en parallèle
-    ;[accounts.value, riotPath.value, isPro.value, stayLoggedIn.value] = await Promise.all([
+    // On récupère toutes les données en parallèle, y compris le loginDelay
+    ;[accounts.value, riotPath.value, isPro.value, stayLoggedIn.value, loginDelay.value] = await Promise.all([
       window.api.getAccounts(),
       window.api.getRiotPath(),
       window.api.getProStatus(),
-      window.api.getStayLoggedIn()
+      window.api.getStayLoggedIn(),
+      window.api.getLoginDelay()
     ])
     console.log('[VUE] Données initiales reçues:', {
       accounts: accounts.value.length,
       isPro: isPro.value,
-      stayLoggedIn: stayLoggedIn.value
+      stayLoggedIn: stayLoggedIn.value,
+      loginDelay: loginDelay.value
     })
 
-    // NOUVEAU: Écoute des événements de mise à jour
+    // Écoute des événements de mise à jour
     window.api.onUpdateAvailable((version) => {
       newVersion.value = version
       updateAvailable.value = true
-      updateDownloaded.value = false // On s'assure que l'état est propre
+      updateDownloaded.value = false
     })
     window.api.onUpdateDownloaded(() => {
       updateDownloaded.value = true
@@ -82,16 +86,21 @@ onMounted(async () => {
   }
 })
 
-// Watcher pour sauvegarder la préférence quand elle change
+// Watcher pour sauvegarder la préférence "Rester connecté"
 watch(stayLoggedIn, (newValue) => {
   window.api.setStayLoggedIn(newValue)
+})
+
+// NOUVEAU: Watcher pour sauvegarder le délai
+watch(loginDelay, (newValue) => {
+  window.api.setLoginDelay(newValue)
 })
 
 // --- Computed Properties ---
 const isAccountListEmpty = computed(() => accounts.value.length === 0)
 const modalTitle = computed(() => (modalMode.value === 'add' ? 'Ajouter un nouveau compte' : 'Modifier le compte'))
 
-// NOUVEAU: Message pour la bannière de mise à jour
+// Message pour la bannière de mise à jour
 const updateMessage = computed(() => {
   if (updateDownloaded.value) {
     return 'Mise à jour prête. Redémarrez pour installer.'
@@ -104,7 +113,6 @@ const updateMessage = computed(() => {
 
 // --- Methods ---
 
-// NOUVEAU: Méthode pour redémarrer l'app
 const restartAndUpdate = () => {
   window.api.restartAppToUpdate()
 }
@@ -318,7 +326,6 @@ const handleVerifyLicense = async () => {
         <span v-if="isPro" class="pro-badge">PRO</span>
       </div>
       <div class="header-actions">
-        <!-- ... (autres boutons) ... -->
         <button
           v-if="!isReorderMode"
           @click="toggleReorderMode"
@@ -532,12 +539,32 @@ const handleVerifyLicense = async () => {
             </div>
           </div>
 
-          <!-- Section pour "Rester connecté" -->
+          <!-- Section Options de connexion -->
           <div class="setting-item">
             <label>Options de connexion</label>
-            <div class="checkbox-group">
+
+            <!-- Checkbox Rester connecté -->
+            <div class="checkbox-group" style="margin-bottom: 20px;">
               <input type="checkbox" id="stay-logged-in" v-model="stayLoggedIn" />
               <label for="stay-logged-in">Cocher "Rester connecté" automatiquement</label>
+            </div>
+
+            <!-- NOUVEAU: Slider pour le délai -->
+            <div class="slider-group">
+              <div class="slider-header">
+                <label for="login-delay">Délai d'écriture</label>
+                <span class="slider-value">{{ (loginDelay / 1000).toFixed(1) }} s</span>
+              </div>
+              <input
+                type="range"
+                id="login-delay"
+                v-model.number="loginDelay"
+                min="500"
+                max="10000"
+                step="100"
+                class="riot-slider"
+              />
+              <p class="slider-desc">Augmentez ce délai si le mot de passe est tapé avant que le client ne soit prêt.</p>
             </div>
           </div>
 
@@ -556,7 +583,7 @@ const handleVerifyLicense = async () => {
       <p>{{ statusMessage }}</p>
     </footer>
 
-    <!-- NOUVEAU: Bannière pour la mise à jour -->
+    <!-- Bannière pour la mise à jour -->
     <div v-if="updateAvailable" class="update-banner">
       <span>{{ updateMessage }}</span>
       <button v-if="updateDownloaded" @click="restartAndUpdate" class="btn btn-primary">Redémarrer</button>
