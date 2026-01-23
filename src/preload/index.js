@@ -13,8 +13,14 @@ const api = {
   launchGame: (data) => ipcRenderer.invoke('launch-game', data),
   selectRiotPath: () => ipcRenderer.invoke('select-riot-path'),
   getRiotPath: () => ipcRenderer.invoke('get-riot-path'),
+
+  // Gestion "Rester connecté"
   getStayLoggedIn: () => ipcRenderer.invoke('get-stay-logged-in'),
   setStayLoggedIn: (value) => ipcRenderer.invoke('set-stay-logged-in', value),
+
+  // NOUVEAU : Gestion du délai (C'est ce qui manquait !)
+  getLoginDelay: () => ipcRenderer.invoke('get-login-delay'),
+  setLoginDelay: (value) => ipcRenderer.invoke('set-login-delay', value),
 
   // Fonctions pour contrôler la fenêtre
   minimizeApp: () => ipcRenderer.send('minimize-app'),
@@ -27,7 +33,7 @@ const api = {
   getProStatus: () => ipcRenderer.invoke('get-pro-status'),
   verifyLicense: (key) => ipcRenderer.invoke('verify-license', key),
 
-  // NOUVEAU: Fonctions pour les mises à jour
+  // Fonctions pour les mises à jour
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (_event, ...args) => callback(...args)),
   onUpdateDownloaded: (callback) => ipcRenderer.on('update-downloaded', (_event, ...args) => callback(...args)),
   restartAppToUpdate: () => ipcRenderer.send('restart-app-to-update')

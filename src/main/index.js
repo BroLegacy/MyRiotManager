@@ -7,7 +7,7 @@ import { exec } from 'child_process'
 import fs from 'fs'
 import { randomUUID } from 'crypto'
 import axios from 'axios'
-import { autoUpdater } from 'electron-updater' // NOUVEAU
+import { autoUpdater } from 'electron-updater'
 
 const store = new Store()
 
@@ -19,7 +19,7 @@ function log(msg) {
   console.log(`[MAIN] ${new Date().toLocaleTimeString()}: ${msg}`)
 }
 
-// NOUVEAU: Configuration de l'auto-updater
+// Configuration de l'auto-updater
 autoUpdater.logger = {
   info: (msg) => log(`[Updater] ${msg}`),
   warn: (msg) => log(`[Updater] WARN: ${msg}`),
@@ -39,14 +39,12 @@ function setupAutoUpdater(mainWindow) {
   })
 
   ipcMain.on('restart-app-to-update', () => {
-    log('Redémarrage de l\'application pour installer la mise à jour.')
+    log("Redémarrage de l'application pour installer la mise à jour.")
     autoUpdater.quitAndInstall()
   })
 }
 
-
 async function validateLicenseKey(key) {
-  // ... (code inchangé)
   if (!key) return false
   if (key === 'DEV-PRO-MODE') {
     log('Activation du mode PRO via la clé de développement.')
@@ -91,7 +89,6 @@ function createWindow() {
     }
   })
 
-  // NOUVEAU: On passe la mainWindow à la fonction de setup de l'updater
   setupAutoUpdater(mainWindow)
 
   mainWindow.on('ready-to-show', () => {
@@ -110,7 +107,6 @@ function createWindow() {
   }
 }
 
-// ... (tous les autres handlers IPC restent inchangés)
 // --- CONTRÔLES ---
 ipcMain.on('minimize-app', () => {
   BrowserWindow.getFocusedWindow()?.minimize()
@@ -143,13 +139,21 @@ ipcMain.handle('select-riot-path', async () => {
 })
 ipcMain.handle('get-riot-path', () => store.get('riotPath', null))
 
-// NOUVEAU: Handlers pour l'option "Rester connecté"
+// Handlers pour l'option "Rester connecté"
 ipcMain.handle('get-stay-logged-in', () => store.get('stayLoggedIn', false))
 ipcMain.handle('set-stay-logged-in', (event, value) => {
   const boolValue = !!value
   store.set('stayLoggedIn', boolValue)
   log(`Option "Rester connecté" mise à jour : ${boolValue}`)
   return boolValue
+})
+
+// NOUVEAU : Handlers pour le délai de connexion (Login Delay)
+ipcMain.handle('get-login-delay', () => store.get('loginDelay', 1500))
+ipcMain.handle('set-login-delay', (event, value) => {
+  const numValue = parseInt(value, 10)
+  store.set('loginDelay', numValue)
+  return numValue
 })
 
 // --- GESTION PRO ---
@@ -297,9 +301,12 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
   exec(command, { cwd: workingDir })
 
   try {
-    // MODIFIÉ: On récupère la préférence et on la passe à la macro
     const stayLoggedIn = store.get('stayLoggedIn', false)
-    await typeLoginVBS(cleanUser, cleanPass, stayLoggedIn)
+    // NOUVEAU: Récupération du délai
+    const loginDelay = store.get('loginDelay', 1500)
+
+    // On passe le délai à la fonction VBS
+    await typeLoginVBS(cleanUser, cleanPass, stayLoggedIn, loginDelay)
   } catch (err) {
     return 'Erreur macro clavier.'
   }
@@ -315,17 +322,19 @@ ipcMain.handle('launch-game', async (event, { id, game }) => {
 })
 
 // --- VBSCRIPT ---
-// MODIFIÉ: La fonction accepte un paramètre "stayLoggedIn"
-function typeLoginVBS(username, password, stayLoggedIn) {
+// MODIFIÉ: Ajout du paramètre delay
+function typeLoginVBS(username, password, stayLoggedIn, delay) {
   return new Promise((resolve, reject) => {
-    // Le script VBS a été rendu plus strict pour garantir le focus.
+    // Sécuriser le délai
+    const safeDelay = typeof delay === 'number' ? delay : 1500
+
     const vbsContent = `
       Set WshShell = WScript.CreateObject("WScript.Shell")
       Dim targetTitle, activated, i
       targetTitle = "Riot Client"
       activated = False
 
-      ' 1. Boucle pour attendre que la fenêtre "Riot Client" apparaisse (jusqu'à 40s)
+      ' 1. Boucle pour attendre que la fenêtre apparaisse
       For i = 1 To 40
         WScript.Sleep 1000
         If WshShell.AppActivate(targetTitle) Then
@@ -334,22 +343,19 @@ function typeLoginVBS(username, password, stayLoggedIn) {
         End If
       Next
 
-      ' 2. Si la fenêtre a été trouvée au moins une fois
       If activated Then
-        ' Petite pause pour laisser le temps à la fenêtre de se stabiliser
         WScript.Sleep 500
-
-        ' 3. NOUVELLE LOGIQUE - VÉRIFICATION STRICTE DU FOCUS
         WshShell.AppActivate(targetTitle)
-        WScript.Sleep 200 ' Courte pause pour que le focus se fasse
+        WScript.Sleep 200
 
         Set tempShell = CreateObject("WScript.Shell")
         tempShell.SendKeys "%{ESC}"
         WScript.Sleep 100
 
-        ' On vérifie si la fenêtre actuellement active est bien celle que l'on cible.
         If WshShell.AppActivate(targetTitle) Then
-          ' C'est notre confirmation finale.
+          ' NOUVEAU: Utilisation du délai utilisateur
+          WScript.Sleep ${safeDelay}
+
           WshShell.SendKeys "${username}"
           WScript.Sleep 100
           WshShell.SendKeys "{TAB}"
@@ -357,7 +363,6 @@ function typeLoginVBS(username, password, stayLoggedIn) {
           WshShell.SendKeys "${escapeVbs(password)}"
           WScript.Sleep 100
 
-          ' NOUVEAU: Logique pour cocher "Rester connecté"
           If ${stayLoggedIn ? 'True' : 'False'} Then
             WshShell.SendKeys "{TAB}"
             WScript.Sleep 50
@@ -371,21 +376,19 @@ function typeLoginVBS(username, password, stayLoggedIn) {
             WScript.Sleep 50
             WshShell.SendKeys "{TAB}"
             WScript.Sleep 100
-            WshShell.SendKeys " " ' Appuie sur Espace pour cocher la case
+            WshShell.SendKeys " "
             WScript.Sleep 50
             WshShell.SendKeys "{TAB}"
           End If
 
           WScript.Sleep 100
           WshShell.SendKeys "{ENTER}"
-          WScript.Quit(0) ' Succès
+          WScript.Quit(0)
         Else
-          ' ÉCHEC CRITIQUE : La fenêtre active N'EST PAS le client Riot. On arrête tout.
-          WScript.Quit(1) ' Erreur de focus
+          WScript.Quit(1)
         End If
       Else
-        ' La fenêtre n'a jamais été trouvée, on quitte avec une erreur.
-        WScript.Quit(1) ' Erreur de fenêtre non trouvée
+        WScript.Quit(1)
       End If
     `
     const tempVbsPath = join(app.getPath('temp'), 'riot_login_macro.vbs')
@@ -397,8 +400,8 @@ function typeLoginVBS(username, password, stayLoggedIn) {
       } catch (e) {}
 
       if (error) {
-        log('Erreur VBS: Impossible de garantir le focus sur le client Riot ou fenêtre non trouvée.')
-        reject(new Error('Impossible de mettre le focus sur le client Riot.'))
+        log('Erreur VBS focus.')
+        reject(new Error('Impossible de mettre le focus.'))
       } else {
         resolve()
       }
@@ -424,15 +427,11 @@ app.whenReady().then(async () => {
 
   createWindow()
 
-  // NOUVEAU: On lance la vérification des mises à jour après la création de la fenêtre
-  // On le fait ici pour s'assurer que la fenêtre existe pour recevoir les messages.
-  // On attend un peu pour ne pas ralentir le démarrage visible.
   setTimeout(() => {
-    if (!is.dev) { // On ne vérifie les MAJ qu'en production
+    if (!is.dev) {
       autoUpdater.checkForUpdates()
     }
   }, 3000)
-
 
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
